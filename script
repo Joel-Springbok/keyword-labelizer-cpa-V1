@@ -1,0 +1,70 @@
+function main() {
+
+  const cpaTarget = '';  // Vul hier de target in van de CPA
+  const spreadsheetUrl = 'SPREADSHEETURL'; // Vul hier de spreadsheetURL in
+  const spreadsheet = SpreadsheetApp.openByUrl(spreadsheetUrl);
+  const sheet = spreadsheet.getSheetByName('TABBLAD'); // Vul hier de naam van het tabblad in
+  
+//--------------------- Verander niks hieronder
+  
+  sheet.clear();
+  
+  const labelNameGoodCPA = 'good_CPA';
+  const labelNameBadCPA = 'bad_CPA';
+
+  const labelGoodCPA = AdsApp.labels()
+    .withCondition(`Name = "${labelNameGoodCPA}"`)
+    .get();
+  if (labelGoodCPA.hasNext()) {
+    Logger.log(`Label ${labelNameGoodCPA} already exists in this account`);
+  } else {
+    AdsApp.createLabel(labelNameGoodCPA);
+  }
+
+  const labelBadCPA = AdsApp.labels()
+    .withCondition(`Name = "${labelNameBadCPA}"`)
+    .get();
+  if (labelBadCPA.hasNext()) {
+    Logger.log(`Label ${labelNameBadCPA} already exists in this account`);
+  } else {
+    AdsApp.createLabel(labelNameBadCPA);
+  }
+
+  const data = [['Keyword', 'Cost', 'Conversions', 'CPA', 'LabelName']];
+
+  //Selecteer alle zoekwoorden en verwijderen beide labels
+  const keywordsAll = AdsApp.keywords()
+    .forDateRange('LAST_30_DAYS')
+    .get();
+  
+  while (keywordsAll.hasNext()) {
+    const keyword = keywordsAll.next();
+    keyword.removeLabel(labelNameGoodCPA);
+    keyword.removeLabel(labelNameBadCPA);
+  }  
+
+  //Selecteer alle zoekwoorden met meer dan 0 conversies en geef ze een label mee op basis van de cpaTarget
+  const keywordsWithConversions = AdsApp.keywords()
+    .withCondition('Conversions > 0')
+    .forDateRange('LAST_30_DAYS')
+    .get();
+  
+  while (keywordsWithConversions.hasNext()) {
+    const keyword = keywordsWithConversions.next();
+    const stats = keyword.getStatsFor('LAST_30_DAYS');
+    const cpa = stats.getCost() / stats.getConversions();
+    const labelName = (cpa > cpaTarget) ? labelNameBadCPA : labelNameGoodCPA;
+    data.push([
+      keyword.getText(),
+      stats.getCost(),
+      stats.getConversions(),
+      cpa.toFixed(2),
+      labelName
+    ]);
+    keyword.applyLabel(labelName);
+  }  
+
+  if (data.length > 1) {
+    sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+  }
+}
